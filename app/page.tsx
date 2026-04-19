@@ -643,7 +643,41 @@ function HomeView({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [btnHover, setBtnHover] = useState(false);
+  const [phIndex, setPhIndex] = useState(0);
+  const [phText, setPhText] = useState("");
+
+  const PH_EXAMPLES = ["paygrid.io", "linear.app", "figma.com", "stripe.com"];
+
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Typewriter rotator — types in, holds, deletes, advances
+  useEffect(() => {
+    const target = PH_EXAMPLES[phIndex];
+    let i = 0;
+    let deleting = false;
+    let raf: ReturnType<typeof setTimeout>;
+    const step = () => {
+      if (!deleting) {
+        i++;
+        setPhText(target.slice(0, i));
+        if (i >= target.length) {
+          raf = setTimeout(() => { deleting = true; step(); }, 1600);
+          return;
+        }
+      } else {
+        i--;
+        setPhText(target.slice(0, i));
+        if (i <= 0) {
+          setPhIndex((p) => (p + 1) % PH_EXAMPLES.length);
+          return;
+        }
+      }
+      raf = setTimeout(step, deleting ? 40 : 85);
+    };
+    raf = setTimeout(step, 300);
+    return () => clearTimeout(raf);
+  }, [phIndex]);
+
 
   return (
     <div
@@ -659,6 +693,19 @@ function HomeView({
         overflow: "hidden",
       }}
     >
+      {/* Grain / paper texture */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.035,
+          mixBlendMode: "multiply",
+          pointerEvents: "none",
+          backgroundImage:
+            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.7 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
+        }}
+      />
       {/* Aurora mesh — very soft, slowly drifting */}
       <div
         aria-hidden
@@ -690,13 +737,34 @@ function HomeView({
           pointerEvents: "none",
         }}
       />
+      {/* Architectural grid lines */}
       <div
+        aria-hidden
         style={{
           position: "absolute",
           inset: 0,
-          opacity: 0.025,
+          opacity: 0.5,
+          pointerEvents: "none",
+          backgroundImage:
+            "linear-gradient(to right, rgba(26,26,26,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(26,26,26,0.05) 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
+          maskImage:
+            "radial-gradient(ellipse 80% 65% at 50% 50%, #000 40%, transparent 95%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 80% 65% at 50% 50%, #000 40%, transparent 95%)",
+        }}
+      />
+      {/* Dot constellation on top of grid */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.03,
+          pointerEvents: "none",
           backgroundImage: "radial-gradient(circle, #1A1A1A 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
+          backgroundSize: "64px 64px",
+          backgroundPosition: "0 0",
         }}
       />
       <div
@@ -738,6 +806,35 @@ function HomeView({
           animation: "subtleRotate 40s linear infinite",
         }}
       />
+      {/* Orbit marker — small green dot tracing the top-right ring */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: "15%",
+          right: "18%",
+          width: 180,
+          height: 180,
+          marginTop: 0,
+          pointerEvents: "none",
+          animation: "orbit 24s linear infinite",
+        }}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: -3,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: "#2D8B4E",
+            boxShadow: "0 0 8px rgba(45,139,78,0.45)",
+            opacity: 0.7,
+          }}
+        />
+      </div>
 
       <div style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 640 }}>
         <div style={{ animation: "fadeSlideUp 0.8s ease" }}>
@@ -822,24 +919,57 @@ function HomeView({
             animation: "fadeSlideUp 0.8s ease 0.2s both, breathGlow 5.5s ease-in-out 1.2s infinite",
           }}
         >
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="paygrid.io"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onStart()}
-            style={{
-              flex: 1,
-              padding: "18px 24px",
-              fontSize: 16,
-              border: "none",
-              outline: "none",
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
-              color: "#1A1A1A",
-              background: "transparent",
-            }}
-          />
+          <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onStart()}
+              style={{
+                flex: 1,
+                width: "100%",
+                padding: "18px 24px",
+                fontSize: 16,
+                border: "none",
+                outline: "none",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                color: "#1A1A1A",
+                background: "transparent",
+                position: "relative",
+                zIndex: 1,
+              }}
+            />
+            {!query && (
+              <span
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  left: 24,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: 16,
+                  color: "#B8B6B1",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  pointerEvents: "none",
+                  userSelect: "none",
+                }}
+              >
+                {phText}
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 1,
+                    height: "1em",
+                    background: "#B8B6B1",
+                    marginLeft: 2,
+                    verticalAlign: "-2px",
+                    animation: "typewriterCaret 1.1s steps(1) infinite",
+                  }}
+                />
+              </span>
+            )}
+          </div>
           <button
             onClick={onStart}
             onMouseEnter={() => setBtnHover(true)}
@@ -909,6 +1039,42 @@ function HomeView({
               </p>
               <p style={{ ...f(400, 12), color: "#9A9A9A", margin: 0 }}>{s.label}</p>
             </div>
+          ))}
+        </div>
+
+        {/* Trust bar — the stack behind the magic */}
+        <div
+          style={{
+            marginTop: 56,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            opacity: 0.55,
+          }}
+        >
+          <span style={{ ...f(500, 10), letterSpacing: 2, textTransform: "uppercase", color: "#9A9A9A" }}>
+            Built on
+          </span>
+          {["Crustdata", "Exa", "OpenAI", "EDGAR"].map((name, i) => (
+            <span
+              key={name}
+              style={{
+                ...f(500, 11),
+                letterSpacing: 0.8,
+                color: "#6B6B6B",
+                opacity: 0,
+                animation: `fadeSlideUpSm 0.6s ease ${1.1 + i * 0.12}s forwards`,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              {i > 0 && (
+                <span aria-hidden style={{ color: "#D0CEC8", fontSize: 10 }}>·</span>
+              )}
+              {name}
+            </span>
           ))}
         </div>
       </div>
