@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: [
+    "lightningcss",
+    "@tailwindcss/node",
+    "@tailwindcss/postcss",
+  ],
 };
 
 export default nextConfig;
