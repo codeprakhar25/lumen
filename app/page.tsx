@@ -806,35 +806,6 @@ function HomeView({
           animation: "subtleRotate 40s linear infinite",
         }}
       />
-      {/* Orbit marker — small green dot tracing the top-right ring */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          top: "15%",
-          right: "18%",
-          width: 180,
-          height: 180,
-          marginTop: 0,
-          pointerEvents: "none",
-          animation: "orbit 24s linear infinite",
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            top: -3,
-            left: "50%",
-            transform: "translateX(-50%)",
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: "#2D8B4E",
-            boxShadow: "0 0 8px rgba(45,139,78,0.45)",
-            opacity: 0.7,
-          }}
-        />
-      </div>
 
       <div style={{ position: "relative", zIndex: 1, textAlign: "center", maxWidth: 640 }}>
         <div style={{ animation: "fadeSlideUp 0.8s ease" }}>
