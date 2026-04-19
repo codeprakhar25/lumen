@@ -12,7 +12,8 @@
 
 # testing
 /coverage
-
+/data
+/plans
 # next.js
 /.next/
 /out/
@@ -39,3 +40,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.gstack/
