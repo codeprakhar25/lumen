@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Source-of-truth sector CSVs (TCC-locked; seed locally only)
+/data/india_*_vcs.csv
+
 # vercel
 .vercel
 
