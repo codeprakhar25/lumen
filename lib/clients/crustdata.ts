@@ -164,16 +164,3 @@ export async function personSearch(companyName: string, cacheKey: string): Promi
   })
 }
 
-// ── Person enrich (v1) ────────────────────────────────────────────────────
-
-export async function personEnrich(linkedinUrl: string): Promise<CrustPerson | null> {
-  const cacheKey = `person_enrich:${linkedinUrl}`
-  return cached('cache_crustdata', cacheKey, TTL.CRUSTDATA, async () => {
-    const res = await fetch(
-      `${BASE}/screener/person/enrich?linkedin_url=${encodeURIComponent(linkedinUrl)}`,
-      { headers: { 'Authorization': `Bearer ${env.CRUSTDATA_API_KEY}` } }
-    )
-    if (!res.ok) return null
-    return res.json() as Promise<CrustPerson>
-  })
-}

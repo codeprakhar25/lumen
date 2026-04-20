@@ -9,7 +9,7 @@ function nanoid(n: number): string {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { domain?: string; founder_linkedin?: string; linkedin_url?: string }
+  let body: { domain?: string }
   try {
     body = await req.json()
   } catch {
@@ -21,14 +21,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'domain is required' }, { status: 400 })
   }
 
-  const linkedin = body.founder_linkedin ?? body.linkedin_url
-  const inputType = linkedin ? 'linkedin' : 'domain'
-  const inputKey = linkedin ?? domain
-
   const { data: existing } = await supabase
     .from('founder_runs')
     .select('analysis_id, created_at')
-    .eq('input', inputKey)
+    .eq('input', domain)
     .eq('status', 'complete')
     .order('created_at', { ascending: false })
     .limit(1)
@@ -53,8 +49,8 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabase.from('founder_runs').insert({
     analysis_id: analysisId,
-    input_type: inputType,
-    input: inputKey,
+    input_type: 'domain',
+    input: domain,
     status: 'pending',
     current_stage: null,
   })

@@ -1,7 +1,7 @@
 // Step 4: Build candidate universe — union competitor-investors with DB firms
 import { supabase, type VcFirm } from '@/lib/clients/supabase'
 import type { InvestorHit } from '@/lib/types'
-import { isSameFirm, canonicalize } from '@/lib/scoring/name-dedupe'
+import { canonicalize } from '@/lib/scoring/name-dedupe'
 
 export type CandidateFirm = VcFirm & {
   source: ('comp_investor' | 'db_seeded')[]
@@ -9,25 +9,40 @@ export type CandidateFirm = VcFirm & {
   investor_hit: InvestorHit | null
 }
 
+// Map the founder's industry string to sector tag(s) used in vc_firms.sector_tags.
+// Keep in sync with FOCUS_TAGS in lib/seed/load-csv.ts.
+export function industryToSectorTags(industry: string | null | undefined): string[] {
+  const s = (industry ?? '').toLowerCase()
+  const tags: string[] = []
+  if (/health|medical|medtech|clinical|pharma|diagnostic/.test(s)) tags.push('healthtech')
+  if (/edtech|education|learning/.test(s)) tags.push('edtech')
+  if (/saas|b2b software|enterprise software/.test(s)) tags.push('saas')
+  if (/\bai\b|artificial intelligence|machine learning|generative|llm/.test(s)) tags.push('ai')
+  if (/fintech|payments|lending|insurance|wealth/.test(s)) tags.push('fintech')
+  if (/consumer|d2c|commerce/.test(s)) tags.push('consumer')
+  if (/climate|clean(tech)?|renewable|ev/.test(s)) tags.push('climate')
+  if (/deeptech|robotics|space|semiconductor/.test(s)) tags.push('deeptech')
+  return tags
+}
+
 export async function buildCandidates(
   rankedInvestors: InvestorHit[],
+  sectorTags: string[],
   maxCandidates = 40
 ): Promise<CandidateFirm[]> {
-  // Load DB firms
-  const { data: dbFirms } = await supabase
-    .from('vc_firms')
-    .select('*')
-    .contains('sector_tags', ['healthtech'])
+  // Load DB firms — overlap on any tag matching the founder's industry.
+  // Fall back to the whole table if we couldn't infer a sector.
+  let dbQuery = supabase.from('vc_firms').select('*')
+  if (sectorTags.length) dbQuery = dbQuery.overlaps('sector_tags', sectorTags)
+  const { data: dbFirms } = await dbQuery
 
   const db: VcFirm[] = dbFirms ?? []
 
-  // Build map: canonical name → InvestorHit
   const investorMap = new Map<string, InvestorHit>()
   for (const inv of rankedInvestors.slice(0, 30)) {
     investorMap.set(canonicalize(inv.investor_name), inv)
   }
 
-  // Build map: canonical name → VcFirm
   const dbMap = new Map<string, VcFirm>()
   for (const f of db) {
     dbMap.set(canonicalize(f.name), f)
@@ -35,10 +50,8 @@ export async function buildCandidates(
 
   const candidates = new Map<string, CandidateFirm>()
 
-  // Add investor-discovered firms
   for (const [canon, inv] of investorMap) {
     candidates.set(canon, {
-      // Minimal VcFirm fields for investor-discovered (not in DB)
       id: '',
       name: inv.investor_name,
       sector: null,
@@ -47,7 +60,7 @@ export async function buildCandidates(
       hq: null,
       geography_focus: null,
       stage_focus: null,
-      sector_tags: ['healthtech'],
+      sector_tags: sectorTags.length ? sectorTags : null,
       healthtech_investment_count: null,
       last_investment_date: null,
       last_investment_company: null,
@@ -59,30 +72,26 @@ export async function buildCandidates(
     })
   }
 
-  // Merge DB firms — if already present, boost; else add as db_seeded
   for (const [canon, firm] of dbMap) {
     if (candidates.has(canon)) {
       const existing = candidates.get(canon)!
-      // Merge: prefer DB record's full data, but keep investor hit
       candidates.set(canon, {
         ...firm,
         source: [...existing.source, 'db_seeded'],
-        interest_score: existing.interest_score + 0.15,  // source_boost
+        interest_score: existing.interest_score + 0.15,
         investor_hit: existing.investor_hit,
       })
     } else {
       candidates.set(canon, {
         ...firm,
         source: ['db_seeded'],
-        interest_score: 0,  // No competitor signal yet
+        interest_score: 0,
         investor_hit: null,
       })
     }
   }
 
-  const sorted = [...candidates.values()]
+  return [...candidates.values()]
     .sort((a, b) => b.interest_score - a.interest_score)
     .slice(0, maxCandidates)
-
-  return sorted
 }

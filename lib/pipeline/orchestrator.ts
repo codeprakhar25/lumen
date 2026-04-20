@@ -3,7 +3,7 @@ import { supabase } from '@/lib/clients/supabase'
 import { profileFounder } from './profile-founder'
 import { findCompetitors } from './find-competitors'
 import { extractInvestors } from './extract-investors'
-import { buildCandidates } from './build-candidates'
+import { buildCandidates, industryToSectorTags } from './build-candidates'
 import { fetchFirmPortfolio, analyzePortfolio } from './firm-portfolio'
 import { fetchThesisSignals } from './thesis-signal'
 import { discoverPartners } from './partner-discover'
@@ -108,7 +108,8 @@ export async function runPipeline(opts: OrchestratorOpts): Promise<void> {
     await emit(opts, stageStartPayload(analysisId, '4'))
     await supabase.from('founder_runs').update({ current_stage: '4' }).eq('analysis_id', analysisId)
 
-    const allCandidates = await buildCandidates(rankedInvestors)
+    const sectorTags = industryToSectorTags(founder.industry)
+    const allCandidates = await buildCandidates(rankedInvestors, sectorTags)
     // Cap enrichment at 15 top candidates to stay within Vercel timeout
     const candidates = allCandidates.slice(0, 15)
     await supabase.from('founder_runs').update({

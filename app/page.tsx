@@ -143,6 +143,45 @@ type AnalysisResult = {
 type StageId = "1" | "2" | "3" | "4" | "5a" | "5b" | "6";
 type StageStore = Partial<Record<StageId, Record<string, unknown>>>;
 
+/* Orchestrator inter-stage payload types (opaque on FE — just passed through). */
+type FounderForStage = AnalysisResult["company"] & {
+  company_name?: string;
+  description: string;
+  industry: string;
+  stage: string;
+};
+type CompetitorForStage = AnalysisResult["competitors"][number];
+type InvestorForStage = InvestorFreq;
+type CandidateForStage = {
+  name: string;
+  website?: string | null;
+  source: string[];
+  interest_score: number;
+} & Record<string, unknown>;
+type EnrichedForStage = {
+  candidate: CandidateForStage;
+  portfolio: {
+    rounds_last_12mo: number;
+    all_round_types: string[];
+    conflict_flag: boolean;
+    weak_adjacency_count: number;
+    portfolio_deals_in_set: number;
+    competitors_funded: string[];
+  };
+  thesis: {
+    thesis_score: number;
+    best_days_ago: number | null;
+    top_signals: unknown[];
+  };
+  deployment: {
+    cadence_score: number;
+    edgar_months_since: number | null;
+    seed_ratio: number;
+  };
+  partners: Array<Record<string, unknown>>;
+  firmStageModes: string[];
+};
+
 /* ─────────────────────────────────────────────────────────────
    Style helpers (from v2)
    ───────────────────────────────────────────────────────────── */
@@ -604,7 +643,41 @@ function HomeView({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [btnHover, setBtnHover] = useState(false);
+  const [phIndex, setPhIndex] = useState(0);
+  const [phText, setPhText] = useState("");
+
+  const PH_EXAMPLES = ["paygrid.io", "linear.app", "figma.com", "stripe.com"];
+
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Typewriter rotator — types in, holds, deletes, advances
+  useEffect(() => {
+    const target = PH_EXAMPLES[phIndex];
+    let i = 0;
+    let deleting = false;
+    let raf: ReturnType<typeof setTimeout>;
+    const step = () => {
+      if (!deleting) {
+        i++;
+        setPhText(target.slice(0, i));
+        if (i >= target.length) {
+          raf = setTimeout(() => { deleting = true; step(); }, 1600);
+          return;
+        }
+      } else {
+        i--;
+        setPhText(target.slice(0, i));
+        if (i <= 0) {
+          setPhIndex((p) => (p + 1) % PH_EXAMPLES.length);
+          return;
+        }
+      }
+      raf = setTimeout(step, deleting ? 40 : 85);
+    };
+    raf = setTimeout(step, 300);
+    return () => clearTimeout(raf);
+  }, [phIndex]);
+
 
   return (
     <div
@@ -620,6 +693,19 @@ function HomeView({
         overflow: "hidden",
       }}
     >
+      {/* Grain / paper texture */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.035,
+          mixBlendMode: "multiply",
+          pointerEvents: "none",
+          backgroundImage:
+            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.7 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")",
+        }}
+      />
       {/* Aurora mesh — very soft, slowly drifting */}
       <div
         aria-hidden
@@ -651,13 +737,34 @@ function HomeView({
           pointerEvents: "none",
         }}
       />
+      {/* Architectural grid lines */}
       <div
+        aria-hidden
         style={{
           position: "absolute",
           inset: 0,
-          opacity: 0.025,
+          opacity: 0.5,
+          pointerEvents: "none",
+          backgroundImage:
+            "linear-gradient(to right, rgba(26,26,26,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(26,26,26,0.05) 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
+          maskImage:
+            "radial-gradient(ellipse 80% 65% at 50% 50%, #000 40%, transparent 95%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 80% 65% at 50% 50%, #000 40%, transparent 95%)",
+        }}
+      />
+      {/* Dot constellation on top of grid */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0.03,
+          pointerEvents: "none",
           backgroundImage: "radial-gradient(circle, #1A1A1A 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
+          backgroundSize: "64px 64px",
+          backgroundPosition: "0 0",
         }}
       />
       <div
@@ -764,9 +871,8 @@ function HomeView({
               maxWidth: 480,
             }}
           >
-            Paste your company URL or LinkedIn. In 30 seconds, get the VCs most likely to fund you
-            — with partner-level recommendations, thesis alignment, and the exact pitch angle to
-            use.
+            Paste your company URL. In 30 seconds, get the VCs most likely to fund you — with
+            partner-level recommendations, thesis alignment, and the exact pitch angle to use.
           </p>
         </div>
 
@@ -784,24 +890,57 @@ function HomeView({
             animation: "fadeSlideUp 0.8s ease 0.2s both, breathGlow 5.5s ease-in-out 1.2s infinite",
           }}
         >
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="paygrid.io or linkedin.com/company/paygrid"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onStart()}
-            style={{
-              flex: 1,
-              padding: "18px 24px",
-              fontSize: 16,
-              border: "none",
-              outline: "none",
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
-              color: "#1A1A1A",
-              background: "transparent",
-            }}
-          />
+          <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onStart()}
+              style={{
+                flex: 1,
+                width: "100%",
+                padding: "18px 24px",
+                fontSize: 16,
+                border: "none",
+                outline: "none",
+                fontFamily: "'Plus Jakarta Sans', sans-serif",
+                color: "#1A1A1A",
+                background: "transparent",
+                position: "relative",
+                zIndex: 1,
+              }}
+            />
+            {!query && (
+              <span
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  left: 24,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: 16,
+                  color: "#B8B6B1",
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  pointerEvents: "none",
+                  userSelect: "none",
+                }}
+              >
+                {phText}
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 1,
+                    height: "1em",
+                    background: "#B8B6B1",
+                    marginLeft: 2,
+                    verticalAlign: "-2px",
+                    animation: "typewriterCaret 1.1s steps(1) infinite",
+                  }}
+                />
+              </span>
+            )}
+          </div>
           <button
             onClick={onStart}
             onMouseEnter={() => setBtnHover(true)}
@@ -873,6 +1012,42 @@ function HomeView({
             </div>
           ))}
         </div>
+
+        {/* Trust bar — the stack behind the magic */}
+        <div
+          style={{
+            marginTop: 56,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 10,
+            opacity: 0.55,
+          }}
+        >
+          <span style={{ ...f(500, 10), letterSpacing: 2, textTransform: "uppercase", color: "#9A9A9A" }}>
+            Built on
+          </span>
+          {["Crustdata", "Exa", "OpenAI", "EDGAR"].map((name, i) => (
+            <span
+              key={name}
+              style={{
+                ...f(500, 11),
+                letterSpacing: 0.8,
+                color: "#6B6B6B",
+                opacity: 0,
+                animation: `fadeSlideUpSm 0.6s ease ${1.1 + i * 0.12}s forwards`,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              {i > 0 && (
+                <span aria-hidden style={{ color: "#D0CEC8", fontSize: 10 }}>·</span>
+              )}
+              {name}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -893,12 +1068,12 @@ function HomeView({
 */
 
 const UI_STAGES = [
-  { label: "Enriching company profile", api: "Company Enrich API" },
-  { label: "Discovering competitors", api: "Company Search API" },
-  { label: "Mapping investor networks", api: "Batch Enrich + Ranking" },
-  { label: "Profiling VC partners", api: "Person Search + Enrich" },
-  { label: "Scanning web intelligence", api: "Web Search API" },
-  { label: "Scoring and ranking", api: "AI Synthesis Engine" },
+  { label: "Enriching company profile", api: "Crustdata Company Enrich" },
+  { label: "Discovering competitors", api: "Crustdata Company Search" },
+  { label: "Mapping investor networks", api: "In-memory ranking" },
+  { label: "Profiling VC partners", api: "Crustdata Person Search" },
+  { label: "Scanning web intelligence", api: "Exa Web Search" },
+  { label: "Scoring and ranking", api: "OpenAI synthesis" },
 ] as const;
 
 const PANEL_HEADER = [
@@ -1701,7 +1876,7 @@ function Dashboard({ result }: { result: AnalysisResult }) {
           >
             Analyzing
           </p>
-          <p style={{ ...f(600, 14), color: "#1A1A1A", margin: "0 0 2px" }}>{company.name}</p>
+          <p style={{ ...f(600, 14), color: "#1A1A1A", margin: "0 0 2px" }}>{company.name ?? company.domain}</p>
           <p style={{ ...f(400, 12), color: "#9A9A9A", margin: "0 0 8px" }}>
             {company.industry ?? ""}
             {company.sub_industry ? ` — ${company.sub_industry}` : ""}
@@ -1757,10 +1932,10 @@ function Dashboard({ result }: { result: AnalysisResult }) {
                 color: "#fff",
               }}
             >
-              {company.name[0]}
+              {(company.name ?? company.domain ?? "?")[0]?.toUpperCase()}
             </div>
             <div>
-              <h3 style={{ ...f(600, 15), color: "#1A1A1A", margin: 0 }}>{company.name}</h3>
+              <h3 style={{ ...f(600, 15), color: "#1A1A1A", margin: 0 }}>{company.name ?? company.domain}</h3>
               <p style={{ ...f(400, 12), color: "#9A9A9A", margin: 0 }}>{company.description ?? company.domain}</p>
             </div>
           </div>
@@ -2276,7 +2451,7 @@ export default function LumenPage() {
   const [stageStore, setStageStore] = useState<StageStore>({});
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
-  const esRef = useRef<EventSource | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const pendingDataRef = useRef<Partial<Record<StageId, Record<string, unknown>>>>({});
   const pendingResultRef = useRef<AnalysisResult | null>(null);
@@ -2306,153 +2481,228 @@ export default function LumenPage() {
     setStageStore({});
     setResult(null);
     setErrorMessage(null);
-    esRef.current?.close();
-    esRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
     clearPacing();
   }, [clearPacing]);
 
-  const openStream = useCallback((streamUrl: string) => {
-    const es = new EventSource(streamUrl);
-    esRef.current = es;
+  const runPipelineOrchestrated = useCallback(
+    async (analysisId: string, domain: string, createdAt: string) => {
+      const ac = new AbortController();
+      abortRef.current = ac;
 
-    const tryFinish = () => {
-      if (metronomeDoneRef.current && pendingResultRef.current) {
-        const r = pendingResultRef.current;
-        pendingResultRef.current = null;
-        setResult(r);
-        setCompletedIndex(UI_STAGES.length - 1);
-        window.setTimeout(() => setView("dashboard"), 800);
-      }
-    };
+      const tryFinish = () => {
+        if (metronomeDoneRef.current && pendingResultRef.current) {
+          const r = pendingResultRef.current;
+          pendingResultRef.current = null;
+          setResult(r);
+          setCompletedIndex(UI_STAGES.length - 1);
+          window.setTimeout(() => setView("dashboard"), 800);
+        }
+      };
 
-    const pushPanelData = (idx: number) => {
-      const stagesInPanel = STAGES_BY_PANEL[idx] ?? [];
-      const updates: Record<string, Record<string, unknown>> = {};
-      for (const s of stagesInPanel) {
-        const d = pendingDataRef.current[s];
-        if (d) updates[s] = d;
-      }
-      if (Object.keys(updates).length > 0) {
-        setStageStore((prev) => ({ ...prev, ...updates }));
-      }
-    };
+      const pushPanelData = (idx: number) => {
+        const stagesInPanel = STAGES_BY_PANEL[idx] ?? [];
+        const updates: Record<string, Record<string, unknown>> = {};
+        for (const s of stagesInPanel) {
+          const d = pendingDataRef.current[s];
+          if (d) updates[s] = d;
+        }
+        if (Object.keys(updates).length > 0) {
+          setStageStore((prev) => ({ ...prev, ...updates }));
+        }
+      };
 
-    const activatePanel = (idx: number) => {
-      setActiveIndex(idx);
-      // Reveal data for this panel after a short skeleton window.
-      revealTimerRef.current = window.setTimeout(() => {
-        revealTimerRef.current = null;
-        revealedPanelsRef.current.add(idx);
-        pushPanelData(idx);
-        setCompletedIndex((c) => Math.max(c, idx));
-      }, REVEAL_MS);
+      const activatePanel = (idx: number) => {
+        setActiveIndex(idx);
+        revealTimerRef.current = window.setTimeout(() => {
+          revealTimerRef.current = null;
+          revealedPanelsRef.current.add(idx);
+          pushPanelData(idx);
+          setCompletedIndex((c) => Math.max(c, idx));
+        }, REVEAL_MS);
 
-      // Schedule next panel or completion.
-      if (idx < UI_STAGES.length - 1) {
-        metronomeRef.current = window.setTimeout(() => {
-          metronomeRef.current = null;
-          activatePanel(idx + 1);
-        }, PANEL_DWELL_MS);
-      } else {
-        metronomeRef.current = window.setTimeout(() => {
-          metronomeRef.current = null;
-          metronomeDoneRef.current = true;
-          tryFinish();
-        }, PANEL_DWELL_MS);
-      }
-    };
+        if (idx < UI_STAGES.length - 1) {
+          metronomeRef.current = window.setTimeout(() => {
+            metronomeRef.current = null;
+            activatePanel(idx + 1);
+          }, PANEL_DWELL_MS);
+        } else {
+          metronomeRef.current = window.setTimeout(() => {
+            metronomeRef.current = null;
+            metronomeDoneRef.current = true;
+            tryFinish();
+          }, PANEL_DWELL_MS);
+        }
+      };
 
-    // Kick off the metronome at panel 0.
-    activatePanel(0);
-
-    const onStageComplete = (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data) as {
-          stage: StageId;
-          stage_data?: Record<string, unknown>;
-        };
-        pendingDataRef.current[data.stage] = data.stage_data ?? {};
-        const idx = stageToUIIndex(data.stage);
-        // If this panel has already had its reveal, push the late-arriving data live.
+      const pushStage = (id: StageId, data: Record<string, unknown>) => {
+        pendingDataRef.current[id] = data;
+        const idx = stageToUIIndex(id);
         if (revealedPanelsRef.current.has(idx)) {
-          setStageStore((prev) => ({ ...prev, [data.stage]: data.stage_data ?? {} }));
+          setStageStore((prev) => ({ ...prev, [id]: data }));
         }
-      } catch {}
-    };
+      };
 
-    const onStageError = (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data) as { recoverable?: boolean; error?: string };
-        if (!data.recoverable) {
-          setErrorMessage(data.error ?? "A stage failed.");
+      const call = async <T,>(url: string, body: unknown, attempts = 2): Promise<T> => {
+        let lastErr: unknown;
+        for (let i = 0; i < attempts; i++) {
+          try {
+            const r = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+              signal: ac.signal,
+            });
+            if (r.ok) return (await r.json()) as T;
+            const txt = await r.text();
+            lastErr = new Error(`${url} ${r.status}: ${txt.slice(0, 200)}`);
+            if (r.status < 500 || r.status === 504) break;
+          } catch (e) {
+            if ((e as Error)?.name === "AbortError") throw e;
+            lastErr = e;
+          }
         }
-      } catch {}
-    };
+        throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+      };
 
-    const onResultsReady = (e: MessageEvent) => {
+      // Kick off metronome immediately; data arrives asynchronously.
+      activatePanel(0);
+
       try {
-        const data = JSON.parse(e.data) as { results: AnalysisResult };
-        pendingResultRef.current = data.results;
+        const { founder } = await call<{ founder: FounderForStage }>(
+          "/api/pipeline/profile",
+          { analysisId, domain }
+        );
+        pushStage("1", { company: { ...founder, name: (founder as { company_name?: string }).company_name ?? founder.name } });
+
+        const { competitors } = await call<{ competitors: CompetitorForStage[] }>(
+          "/api/pipeline/competitors",
+          { analysisId, founder }
+        );
+        pushStage("2", {
+          competitors_count: competitors.length,
+          competitors: competitors.slice(0, 10),
+        });
+
+        const candOut = await call<{
+          rankedInvestors: InvestorForStage[];
+          allCandidatesCount: number;
+          candidates: CandidateForStage[];
+        }>("/api/pipeline/candidates", {
+          analysisId,
+          competitors,
+          founderStage: founder.stage,
+          founderIndustry: founder.industry,
+        });
+        pushStage("3", {
+          unique_investors_count: candOut.rankedInvestors.length,
+          funding_rounds_analyzed: competitors.reduce(
+            (s: number, c: CompetitorForStage) => s + (c.investors?.length ?? 0),
+            0
+          ),
+          investor_frequency: candOut.rankedInvestors.slice(0, 8),
+        });
+        pushStage("4", {
+          firms_analyzed: candOut.allCandidatesCount,
+          firms_shortlisted: candOut.candidates.length,
+          shortlisted_firms: candOut.candidates.slice(0, 5).map((c) => ({
+            name: c.name,
+            source: c.source,
+            interest_score: c.interest_score,
+          })),
+        });
+
+        // Stage 5: fan out enrich per-firm with per-firm retry.
+        const competitorNames = competitors.map((c) => c.name);
+        const enrichedResults = await Promise.all(
+          candOut.candidates.map(async (candidate) => {
+            try {
+              const { enriched } = await call<{ enriched: EnrichedForStage }>(
+                "/api/pipeline/enrich-firm",
+                { candidate, founder, domain, competitorNames },
+                2
+              );
+              return enriched;
+            } catch {
+              return {
+                candidate: { ...candidate, interest_score: candidate.interest_score * 0.5 },
+                portfolio: {
+                  rounds_last_12mo: 0,
+                  all_round_types: [],
+                  conflict_flag: false,
+                  weak_adjacency_count: 0,
+                  portfolio_deals_in_set: 0,
+                  competitors_funded: [],
+                },
+                thesis: { thesis_score: 0, best_days_ago: null, top_signals: [] },
+                deployment: { cadence_score: 0, edgar_months_since: null, seed_ratio: 0.5 },
+                partners: [],
+                firmStageModes: [],
+              } satisfies EnrichedForStage;
+            }
+          })
+        );
+        const partnerCount = enrichedResults.reduce((s, e) => s + e.partners.length, 0);
+        const signalCount = enrichedResults.reduce((s, e) => s + e.thesis.top_signals.length, 0);
+        pushStage("5a", {
+          partners_profiled: partnerCount,
+          partners: enrichedResults.flatMap((e) => e.partners).slice(0, 5),
+        });
+        pushStage("5b", {
+          total_signals: signalCount,
+          signals_by_firm: enrichedResults.slice(0, 5).map((e) => ({
+            firm: e.candidate.name,
+            signals: e.thesis.top_signals,
+          })),
+        });
+
+        const finalResult = await call<AnalysisResult>("/api/pipeline/rank", {
+          analysisId,
+          domain,
+          founder,
+          competitors,
+          rankedInvestors: candOut.rankedInvestors,
+          enriched: enrichedResults,
+          createdAt,
+        });
+        const tier1 = finalResult.vc_matches.filter((m) => m.tier === 1).length;
+        pushStage("6", {
+          matches_count: finalResult.vc_matches.length,
+          tier_1_count: tier1,
+          tier_2_count: finalResult.vc_matches.length - tier1,
+        });
+
+        pendingResultRef.current = finalResult;
         tryFinish();
-      } catch {
-        setErrorMessage("Malformed results payload.");
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return;
+        const msg = err instanceof Error ? err.message : "Pipeline failed.";
+        setErrorMessage(msg);
         setView("error");
-      } finally {
-        es.close();
-        esRef.current = null;
-      }
-    };
-
-    const onFatal = (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data) as { error?: string };
-        setErrorMessage(data.error ?? "Pipeline failed.");
-      } catch {
-        setErrorMessage("Pipeline failed.");
-      }
-      setView("error");
-      es.close();
-      esRef.current = null;
-      clearPacing();
-    };
-
-    es.addEventListener("stage_complete", onStageComplete as EventListener);
-    es.addEventListener("stage_error", onStageError as EventListener);
-    es.addEventListener("results_ready", onResultsReady as EventListener);
-    es.addEventListener("error", onFatal as EventListener);
-    es.onerror = () => {
-      // Browser-level connection error (not a server-sent "error" event)
-      if (esRef.current === es) {
-        setErrorMessage("Lost connection to the analysis stream.");
-        setView("error");
-        es.close();
-        esRef.current = null;
         clearPacing();
       }
-    };
-  }, [clearPacing]);
+    },
+    [clearPacing]
+  );
 
   const onStart = useCallback(async () => {
     const raw = (query || "paygrid.io").trim();
     if (!raw) return;
     const stripped = raw.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "");
-    const isLinkedIn = /(^|\.)linkedin\.com(\/|$)/i.test(stripped);
-    let domain = stripped;
-    let linkedinUrl: string | undefined;
-    if (isLinkedIn) {
-      linkedinUrl = /^https?:\/\//i.test(raw) ? raw : `https://${stripped}`;
-      const slugMatch = stripped.match(/linkedin\.com\/(?:company|in|school)\/([^/?#]+)/i);
-      domain = slugMatch ? `${slugMatch[1]}.linkedin` : stripped;
-    } else {
-      domain = stripped.split("/")[0];
+    if (/(^|\.)linkedin\.com(\/|$)/i.test(stripped)) {
+      setErrorMessage("LinkedIn URLs aren't supported yet — please paste a company website (e.g. stripe.com).");
+      return;
     }
+    const domain = stripped.split("/")[0];
+    if (!domain) return;
     resetPipelineState();
     setView("analyzing");
     try {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(linkedinUrl ? { domain, linkedin_url: linkedinUrl } : { domain }),
+        body: JSON.stringify({ domain }),
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -2461,7 +2711,7 @@ export default function LumenPage() {
       const payload = (await res.json()) as {
         analysis_id: string;
         status?: string;
-        stream_url?: string;
+        created_at?: string;
         results_url?: string;
       };
       if (payload.status === "cached") {
@@ -2474,16 +2724,15 @@ export default function LumenPage() {
         setView("dashboard");
         return;
       }
-      const streamUrl = payload.stream_url ?? `/api/analyze/stream/${payload.analysis_id}`;
-      openStream(streamUrl);
+      runPipelineOrchestrated(payload.analysis_id, domain, payload.created_at ?? new Date().toISOString());
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to start analysis.";
       setErrorMessage(message);
       setView("error");
     }
-  }, [query, resetPipelineState, openStream]);
+  }, [query, resetPipelineState, runPipelineOrchestrated]);
 
-  useEffect(() => () => { esRef.current?.close(); }, []);
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
 
   if (view === "dashboard" && result) {
     return <Dashboard result={result} />;
